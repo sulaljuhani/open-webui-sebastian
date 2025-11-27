@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG-main}
+    image: open-webui-sebastian:custom
     container_name: open-webui-sebastian
     volumes:
       - open-webui:/app/backend/data

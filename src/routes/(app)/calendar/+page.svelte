@@ -10,14 +10,24 @@
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
-let events = [];
-let eventsByDate: Record<string, any[]> = {};
+	let loaded = $state(false);
+	let events = $state([]);
 	let currentDate = new Date();
-	let currentMonth = currentDate.getMonth();
-	let currentYear = currentDate.getFullYear();
-	let calendarDays = [];
-	let backendBaseUrl = 'http://langgraph-agents:8000';
+	let currentMonth = $state(currentDate.getMonth());
+	let currentYear = $state(currentDate.getFullYear());
+	let calendarDays = $state([]);
+	let backendBaseUrl = $state('http://langgraph-agents:8000');
+
+	// Derived state for events by date
+	let eventsByDate = $derived(
+		(events || []).reduce((acc, event) => {
+			const key = event.start_time?.slice(0, 10);
+			if (key) {
+				acc[key] = acc[key] ? [...acc[key], event] : [event];
+			}
+			return acc;
+		}, {} as Record<string, any[]>)
+	);
 
 	const monthNames = [
 		'January', 'February', 'March', 'April', 'May', 'June',
@@ -93,13 +103,6 @@ let eventsByDate: Record<string, any[]> = {};
 			if (response.ok) {
 				const data = await response.json();
 				events = data.events || [];
-				eventsByDate = (events || []).reduce((acc, event) => {
-					const key = event.start_time?.slice(0, 10);
-					if (key) {
-						acc[key] = acc[key] ? [...acc[key], event] : [event];
-					}
-					return acc;
-				}, {} as Record<string, any[]>);
 			}
 		} catch (error) {
 			console.error('Failed to fetch events:', error);
@@ -160,9 +163,7 @@ let eventsByDate: Record<string, any[]> = {};
 							<button
 								id="sidebar-toggle-button"
 								class="cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-								on:click={() => {
-									showSidebar.set(!$showSidebar);
-								}}
+								onclick={() => showSidebar.set(!$showSidebar)}
 							>
 								<div class="self-center p-1.5">
 									<Sidebar />
@@ -217,19 +218,19 @@ let eventsByDate: Record<string, any[]> = {};
 					<div class="flex gap-2">
 						<button
 							class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
-							on:click={goToToday}
+							onclick={goToToday}
 						>
 							Today
 						</button>
 						<button
 							class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
-							on:click={previousMonth}
+							onclick={previousMonth}
 						>
 							←
 						</button>
 						<button
 							class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
-							on:click={nextMonth}
+							onclick={nextMonth}
 						>
 							→
 						</button>

@@ -7,26 +7,26 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import Check from '$lib/components/icons/Check.svelte';
+
+	import TaskItem, { type TodoistTaskNode } from './TaskItem.svelte';
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
-	let tasks = [];
-	let filter = 'all'; // all, active, completed
-	let backendBaseUrl = 'http://langgraph-agents:8000';
+	let loaded = $state(false);
+	let backendBaseUrl = $state('http://langgraph-agents:8000');
+	let projectIdFilter = $state('');
 
 	type TaskStatus = 'todo' | 'in_progress' | 'waiting' | 'done' | 'cancelled';
 
-	interface Task {
+	type TodoistProject = {
 		id: string;
-		title: string;
-		description?: string;
-		status: TaskStatus;
-		priority?: number;
-		due_date?: string;
-		created_at: string;
-	}
+		name: string;
+		color?: string;
+		sections: { id: string; name: string; section_order: number }[];
+	};
+
+	let projects: TodoistProject[] = $state([]);
+	let taskTree: TodoistTaskNode[] = $state([]);
 
 	const getHeaders = () => {
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -37,103 +37,73 @@
 		return headers;
 	};
 
-	const fetchTasks = async () => {
+	const fetchTodoistMirror = async () => {
 		if (typeof localStorage !== 'undefined') {
 			backendBaseUrl = localStorage.getItem('backend_url') || backendBaseUrl;
 		}
 
+		const opts = { method: 'GET', headers: getHeaders() };
+
+		const [projectsRes, tasksRes] = await Promise.allSettled([
+			fetch(`${backendBaseUrl}/api/todoist/projects`, opts),
+			fetch(
+				`${backendBaseUrl}/api/todoist/tasks/tree${projectIdFilter ? `?project_id=${projectIdFilter}` : ''}`,
+				opts
+			)
+		]);
+
+		if (projectsRes.status === 'fulfilled' && projectsRes.value.ok) {
+			projects = await projectsRes.value.json();
+		}
+
+		if (tasksRes.status === 'fulfilled' && tasksRes.value.ok) {
+			taskTree = await tasksRes.value.json();
+		} else {
+			taskTree = [];
+		}
+	};
+
+	const handleToggleComplete = async (taskId: string, currentStatus: TaskStatus) => {
+		const newStatus: TaskStatus = currentStatus === 'done' ? 'todo' : 'done';
+
 		try {
-			const response = await fetch(`${backendBaseUrl}/api/tasks`, {
-				method: 'GET',
-				headers: getHeaders()
+			// Update task status via Todoist REST API
+			const response = await fetch(`https://api.todoist.com/rest/v2/tasks/${taskId}/${newStatus === 'done' ? 'close' : 'reopen'}`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${localStorage.getItem('todoist_api_token') || ''}`,
+					'Content-Type': 'application/json'
+				}
 			});
 
 			if (response.ok) {
-				const data = await response.json();
-				tasks = data.tasks || [];
+				// Optimistically update UI
+				taskTree = taskTree.map(task =>
+					task.todoist_id === taskId ? { ...task, status: newStatus } : task
+				);
+
+				// Refresh from backend to ensure sync
+				setTimeout(() => fetchTodoistMirror(), 1000);
+			} else {
+				console.error('Failed to toggle task status:', response.status);
 			}
 		} catch (error) {
-			console.error('Failed to fetch tasks:', error);
-			// Show demo data for now
-			tasks = [
-				{
-					id: '1',
-					title: 'Connect to backend API',
-					description: 'Set up API key in local storage',
-					status: 'in_progress',
-					priority: 4,
-					created_at: new Date().toISOString()
-				},
-				{
-					id: '2',
-					title: 'Test task management',
-					description: 'Create, update, and complete tasks',
-					status: 'todo',
-					priority: 3,
-					created_at: new Date().toISOString()
-				}
-			];
-		}
-	};
-
-	const toggleTaskStatus = async (taskId: string) => {
-		const task = tasks.find((t) => t.id === taskId);
-		if (!task) return;
-
-		const newStatus: TaskStatus = task.status === 'done' ? 'todo' : 'done';
-
-		// Optimistic update
-		tasks = tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
-
-		try {
-			await fetch(`${backendBaseUrl}/api/tasks/${taskId}`, {
-				method: 'PUT',
-				headers: getHeaders(),
-				body: JSON.stringify({ status: newStatus })
-			});
-		} catch (error) {
-			console.error('Failed to update task:', error);
-			// Revert on error
-			tasks = tasks.map((t) => (t.id === taskId ? { ...t, status: task.status } : t));
-		}
-	};
-
-	const getPriorityColor = (priority?: number) => {
-		switch (priority) {
-			case 5:
-			case 4:
-				return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-			case 3:
-				return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-			case 2:
-			case 1:
-				return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-			default:
-				return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
-		}
-	};
-
-	const formatStatus = (status: TaskStatus) => status.replace(/_/g, ' ');
-
-	const isClosedStatus = (status: TaskStatus) => ['done', 'cancelled'].includes(status);
-
-	const filteredTasks = () => {
-		switch (filter) {
-			case 'active':
-				return tasks.filter((t) => !isClosedStatus(t.status));
-			case 'completed':
-				return tasks.filter((t) => isClosedStatus(t.status));
-			default:
-				return tasks;
+			console.error('Error toggling task:', error);
 		}
 	};
 
 	onMount(async () => {
-		await fetchTasks();
-		loaded = true;
+		try {
+			await fetchTodoistMirror();
+		} catch (err) {
+			console.error('Failed to fetch Todoist mirror data', err);
+		} finally {
+			loaded = true;
+		}
 	});
 </script>
 
+<!-- Page Layout -->
 {#if loaded}
 	<div
 		class="flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
@@ -151,9 +121,7 @@
 							<button
 								id="sidebar-toggle-button"
 								class="cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-								on:click={() => {
-									showSidebar.set(!$showSidebar);
-								}}
+								onclick={() => showSidebar.set(!$showSidebar)}
 							>
 								<div class="self-center p-1.5">
 									<Sidebar />
@@ -198,104 +166,86 @@
 		</nav>
 
 		<div class="pb-1 flex-1 max-h-full overflow-y-auto @container p-6">
-			<div class="max-w-7xl mx-auto">
+			<div class="max-w-7xl mx-auto space-y-6">
 				<!-- Header -->
-				<div class="flex items-center justify-between mb-6">
-					<h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Tasks</h1>
-					<div class="flex gap-2">
-						<button
-							class="px-3 py-1.5 text-sm rounded-lg {filter === 'all'
-								? 'bg-blue-500 text-white'
-								: 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'} transition"
-							on:click={() => (filter = 'all')}
+				<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Tasks</h1>
+						<p class="text-sm text-gray-600 dark:text-gray-400">
+							Mirrored from Todoist via the locked subtask layout.
+						</p>
+					</div>
+					<div class="flex gap-2 flex-wrap">
+						<select
+							class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm px-3 py-2"
+							bind:value={projectIdFilter}
+							onchange={fetchTodoistMirror}
 						>
-							All ({tasks.length})
-						</button>
+							<option value="">All projects</option>
+							{#each projects as project (project.id)}
+								<option value={project.id}>{project.name}</option>
+							{/each}
+						</select>
 						<button
-							class="px-3 py-1.5 text-sm rounded-lg {filter === 'active'
-								? 'bg-blue-500 text-white'
-								: 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'} transition"
-							on:click={() => (filter = 'active')}
+							class="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+							onclick={fetchTodoistMirror}
 						>
-							Active ({tasks.filter((t) => !isClosedStatus(t.status)).length})
-						</button>
-						<button
-							class="px-3 py-1.5 text-sm rounded-lg {filter === 'completed'
-								? 'bg-blue-500 text-white'
-								: 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'} transition"
-							on:click={() => (filter = 'completed')}
-						>
-							Completed ({tasks.filter((t) => isClosedStatus(t.status)).length})
+							Refresh
 						</button>
 					</div>
 				</div>
 
-				<!-- Tasks List -->
-				<div class="space-y-3">
-					{#each filteredTasks() as task (task.id)}
-						<div
-							class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition"
-						>
-							<div class="flex items-start gap-3">
-								<!-- Checkbox -->
-								<button
-									class="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 {task.status ===
-									'done'
-										? 'bg-blue-500 border-blue-500'
-										: 'border-gray-300 dark:border-gray-600 hover:border-blue-500'} transition flex items-center justify-center"
-									on:click={() => toggleTaskStatus(task.id)}
-								>
-									{#if task.status === 'done'}
-										<Check className="size-3 text-white" />
-									{/if}
-								</button>
-
-								<!-- Task Content -->
-								<div class="flex-1 min-w-0">
-									<h3
-										class="text-base font-medium {task.status === 'done'
-											? 'line-through text-gray-500 dark:text-gray-600'
-											: 'text-gray-900 dark:text-gray-100'}"
-									>
-										{task.title}
-									</h3>
-									{#if task.description}
-										<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-											{task.description}
-										</p>
-									{/if}
-
-									<!-- Metadata -->
-									<div class="flex flex-wrap items-center gap-2 mt-2">
-										{#if task.priority}
-											<span class="text-xs px-2 py-0.5 rounded-full {getPriorityColor(task.priority)}">
-												Priority {task.priority}
-											</span>
-										{/if}
-										{#if task.due_date}
-											<span class="text-xs text-gray-500 dark:text-gray-500">
-												Due: {new Date(task.due_date).toLocaleDateString()}
-											</span>
-										{/if}
-										<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400">
-											{formatStatus(task.status)}
-										</span>
-									</div>
-								</div>
-							</div>
+				<!-- Project/Section list -->
+				<div class="space-y-4">
+					{#if taskTree.length === 0}
+						<div class="text-center py-12 text-gray-500 dark:text-gray-500 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
+							No mirrored tasks found. Ask Sebastian to sync Todoist or add a task.
 						</div>
 					{:else}
-						<div class="text-center py-12 text-gray-500 dark:text-gray-500">
-							No tasks found. Ask Sebastian to create some tasks for you!
-						</div>
-					{/each}
-				</div>
+						{#each projects as project (project.id)}
+							<section class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm shadow-sm">
+								<header class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+									<div class="flex items-center gap-3">
+										<div class="size-3 rounded-full" style={`background:${project.color || '#6b7280'}`}></div>
+										<div>
+											<h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+												{project.name}
+											</h2>
+											<p class="text-xs text-gray-500 dark:text-gray-500">
+												{project.sections.length} sections · locked subtasks
+											</p>
+										</div>
+									</div>
+									<div class="text-xs text-gray-500 dark:text-gray-500">
+										Project ID: {project.id}
+									</div>
+								</header>
 
-				<!-- Info message -->
-				<div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-					<p class="text-sm text-blue-800 dark:text-blue-300">
-						✅ Tasks view is ready! Create tasks by chatting with Sebastian.
-					</p>
+								<div class="divide-y divide-gray-100 dark:divide-gray-800">
+									{#if project.sections.length === 0}
+										<div class="p-4 text-sm text-gray-500 dark:text-gray-500">No sections</div>
+									{:else}
+										{#each project.sections as section (section.id)}
+											<div class="p-4 space-y-3">
+												<div class="flex items-center justify-between">
+													<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+														{section.name}
+													</h3>
+												</div>
+												<div class="space-y-3">
+													{#each taskTree.filter((t) => t.project_id === project.id && t.section_id === section.id && (!t.parent_id || t.parent_id === null)) as task (task.todoist_id)}
+														<TaskItem task={task} allTasks={taskTree} onToggleComplete={handleToggleComplete} />
+													{:else}
+														<p class="text-sm text-gray-500 dark:text-gray-500">No tasks in this section.</p>
+													{/each}
+												</div>
+											</div>
+										{/each}
+									{/if}
+								</div>
+							</section>
+						{/each}
+					{/if}
 				</div>
 			</div>
 		</div>

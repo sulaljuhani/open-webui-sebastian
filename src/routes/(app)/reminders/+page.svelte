@@ -11,9 +11,9 @@
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
-	let reminders = [];
-	let backendBaseUrl = 'http://langgraph-agents:8000';
+	let loaded = $state(false);
+	let reminders = $state<Reminder[]>([]);
+	let backendBaseUrl = $state('http://langgraph-agents:8000');
 
 	interface Reminder {
 		id: string;
@@ -204,9 +204,7 @@
 							<button
 								id="sidebar-toggle-button"
 								class="cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-								on:click={() => {
-									showSidebar.set(!$showSidebar);
-								}}
+								onclick={() => showSidebar.set(!$showSidebar)}
 							>
 								<div class="self-center p-1.5">
 									<Sidebar />
@@ -311,13 +309,13 @@
 									<div class="flex-shrink-0 flex gap-2">
 										<button
 											class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition"
-											on:click={() => snoozeReminder(reminder.id)}
+											onclick={() => snoozeReminder(reminder.id)}
 										>
 											Snooze
 										</button>
 										<button
 											class="px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition"
-											on:click={() => dismissReminder(reminder.id)}
+											onclick={() => dismissReminder(reminder.id)}
 										>
 											Dismiss
 										</button>

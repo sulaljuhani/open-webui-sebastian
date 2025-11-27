@@ -10,9 +10,9 @@
 
 	const i18n = getContext('i18n');
 
-	let loaded = false;
-	let events = [];
-	let backendBaseUrl = 'http://langgraph-agents:8000';
+	let loaded = $state(false);
+	let events = $state<Event[]>([]);
+	let backendBaseUrl = $state('http://langgraph-agents:8000');
 
 	interface Event {
 		id: string;
@@ -104,7 +104,8 @@
 		return new Date(dateString) < new Date();
 	};
 
-	const groupedEvents = () => {
+	// Derived state for grouped events
+	let grouped = $derived.by(() => {
 		const sorted = [...events].sort(
 			(a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
 		);
@@ -113,14 +114,12 @@
 		const past = sorted.filter((e) => isPast(e.start_time));
 
 		return { upcoming, past };
-	};
+	});
 
 	onMount(async () => {
 		await fetchEvents();
 		loaded = true;
 	});
-
-	$: grouped = groupedEvents();
 </script>
 
 {#if loaded}
@@ -140,9 +139,7 @@
 							<button
 								id="sidebar-toggle-button"
 								class="cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-								on:click={() => {
-									showSidebar.set(!$showSidebar);
-								}}
+								onclick={() => showSidebar.set(!$showSidebar)}
 							>
 								<div class="self-center p-1.5">
 									<Sidebar />

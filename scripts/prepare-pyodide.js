@@ -1,3 +1,8 @@
+if (process.env.SKIP_PYODIDE === '1') {
+	console.log('SKIP_PYODIDE=1 set; skipping Pyodide download.');
+	process.exit(0);
+}
+
 const packages = [
 	'micropip',
 	'packaging',

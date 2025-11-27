@@ -60,10 +60,10 @@
 	import FolderModal from './Sidebar/Folders/FolderModal.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
 	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
-	import Note from '../icons/Note.svelte';
-	import Calendar from '../icons/Calendar.svelte';
-	import CheckBox from '../icons/CheckBox.svelte';
-	import CalendarSolid from '../icons/CalendarSolid.svelte';
+	        import Note from '../icons/Note.svelte';
+	        import Calendar from '../icons/Calendar.svelte';
+	        import ChartBar from '../icons/ChartBar.svelte';
+	        import CheckBox from '../icons/CheckBox.svelte';	import CalendarSolid from '../icons/CalendarSolid.svelte';
 	import ClockRotateRight from '../icons/ClockRotateRight.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
@@ -688,28 +688,49 @@
 					</Tooltip>
 				</div>
 
-				<div class="">
-					<Tooltip content={$i18n.t('Calendar')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/calendar"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								goto('/calendar');
-								itemClickHandler();
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Calendar')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<Calendar className="size-4.5" />
-							</div>
-						</a>
-					</Tooltip>
-				</div>
-
+				                                <div class="">
+				                                        <Tooltip content={$i18n.t('Calendar')} placement="right">
+				                                                <a
+				                                                        class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+				                                                        href="/calendar"
+				                                                        on:click={async (e) => {
+				                                                                e.stopImmediatePropagation();
+				                                                                e.preventDefault();
+				
+				                                                                goto('/calendar');
+				                                                                itemClickHandler();
+				                                                        }}
+				                                                        draggable="false"
+				                                                        aria-label={$i18n.t('Calendar')}
+				                                                >
+				                                                        <div class=" self-center flex items-center justify-center size-9">
+				                                                                <Calendar className="size-4.5" />
+				                                                        </div>
+				                                                </a>
+				                                        </Tooltip>
+				                                </div>
+				
+				                                <div class="">
+				                                        <Tooltip content={$i18n.t('Life Analytics')} placement="right">
+				                                                <a
+				                                                        class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+				                                                        href="/life"
+				                                                        on:click={async (e) => {
+				                                                                e.stopImmediatePropagation();
+				                                                                e.preventDefault();
+				
+				                                                                goto('/life');
+				                                                                itemClickHandler();
+				                                                        }}
+				                                                        draggable="false"
+				                                                        aria-label={$i18n.t('Life Analytics')}
+				                                                >
+				                                                        <div class=" self-center flex items-center justify-center size-9">
+				                                                                <ChartBar className="size-4.5" />
+				                                                        </div>
+				                                                </a>
+				                                        </Tooltip>
+				                                </div>
 				{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
 					<div class="">
 						<Tooltip content={$i18n.t('Notes')} placement="right">
@@ -947,25 +968,43 @@
 						</a>
 					</div>
 
-					<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
-						<a
-							id="sidebar-calendar-button"
-							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-							href="/calendar"
-							on:click={itemClickHandler}
-							draggable="false"
-							aria-label={$i18n.t('Calendar')}
-						>
-							<div class="self-center">
-								<Calendar className="size-4.5" strokeWidth="2" />
-							</div>
-
-							<div class="flex self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Calendar')}</div>
-							</div>
-						</a>
-					</div>
-
+					                                        <div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+					                                                <a
+					                                                        id="sidebar-calendar-button"
+					                                                        class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+					                                                        href="/calendar"
+					                                                        on:click={itemClickHandler}
+					                                                        draggable="false"
+					                                                        aria-label={$i18n.t('Calendar')}
+					                                                >
+					                                                        <div class="self-center">
+					                                                                <Calendar className="size-4.5" strokeWidth="2" />
+					                                                        </div>
+					
+					                                                        <div class="flex self-center translate-y-[0.5px]">
+					                                                                <div class=" self-center text-sm font-primary">{$i18n.t('Calendar')}</div>
+					                                                        </div>
+					                                                </a>
+					                                        </div>
+					
+					                                        <div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+					                                                <a
+					                                                        id="sidebar-life-button"
+					                                                        class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+					                                                        href="/life"
+					                                                        on:click={itemClickHandler}
+					                                                        draggable="false"
+					                                                        aria-label={$i18n.t('Life')}
+					                                                >
+					                                                        <div class="self-center">
+					                                                                <ChartBar className="size-4.5" strokeWidth="2" />
+					                                                        </div>
+					
+					                                                        <div class="flex self-center translate-y-[0.5px]">
+					                                                                <div class=" self-center text-sm font-primary">{$i18n.t('Life')}</div>
+					                                                        </div>
+					                                                </a>
+					                                        </div>
 					{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
 						<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 							<a
