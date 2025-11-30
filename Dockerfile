@@ -27,6 +27,8 @@ ARG GID=0
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
 ARG BUILD_HASH
 ARG SKIP_FRONTEND_BUILD
+ARG VITE_LANGGRAPH_API_KEY
+ARG VITE_LANGGRAPH_BACKEND_URL
 
 # Set Node.js options (heap limit Allocation failed - JavaScript heap out of memory)
 # ENV NODE_OPTIONS="--max-old-space-size=4096"
@@ -41,6 +43,8 @@ RUN npm ci --force
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+ENV VITE_LANGGRAPH_API_KEY=${VITE_LANGGRAPH_API_KEY}
+ENV VITE_LANGGRAPH_BACKEND_URL=${VITE_LANGGRAPH_BACKEND_URL}
 RUN if [ "$SKIP_FRONTEND_BUILD" != "true" ]; then npm run build; else echo "Skipping frontend build (prebuilt assets will be used)"; fi
 
 ######## WebUI backend ########

@@ -58,15 +58,14 @@
 	import Search from '../icons/Search.svelte';
 	import SearchModal from './SearchModal.svelte';
 	import FolderModal from './Sidebar/Folders/FolderModal.svelte';
-	import Sidebar from '../icons/Sidebar.svelte';
-	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
-	        import Note from '../icons/Note.svelte';
-	        import Calendar from '../icons/Calendar.svelte';
-	        import ChartBar from '../icons/ChartBar.svelte';
-	        import CheckBox from '../icons/CheckBox.svelte';	import CalendarSolid from '../icons/CalendarSolid.svelte';
-	import ClockRotateRight from '../icons/ClockRotateRight.svelte';
-	import { slide } from 'svelte/transition';
-	import HotkeyHint from '../common/HotkeyHint.svelte';
+import Sidebar from '../icons/Sidebar.svelte';
+import PinnedModelList from './Sidebar/PinnedModelList.svelte';
+import Note from '../icons/Note.svelte';
+import Calendar from '../icons/Calendar.svelte';
+import ChartBar from '../icons/ChartBar.svelte';
+import CheckBox from '../icons/CheckBox.svelte';
+import { slide } from 'svelte/transition';
+import HotkeyHint from '../common/HotkeyHint.svelte';
 
 	const BREAKPOINT = 768;
 
@@ -644,50 +643,6 @@
 					</Tooltip>
 				</div>
 
-				<div class="">
-					<Tooltip content={$i18n.t('Events')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/events"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								goto('/events');
-								itemClickHandler();
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Events')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<CalendarSolid className="size-4.5" />
-							</div>
-						</a>
-					</Tooltip>
-				</div>
-
-				<div class="">
-					<Tooltip content={$i18n.t('Reminders')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/reminders"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								goto('/reminders');
-								itemClickHandler();
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Reminders')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<ClockRotateRight className="size-4.5" />
-							</div>
-						</a>
-					</Tooltip>
-				</div>
-
 				                                <div class="">
 				                                        <Tooltip content={$i18n.t('Calendar')} placement="right">
 				                                                <a
@@ -926,44 +881,6 @@
 
 							<div class="flex self-center translate-y-[0.5px]">
 								<div class=" self-center text-sm font-primary">{$i18n.t('Tasks')}</div>
-							</div>
-						</a>
-					</div>
-
-					<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
-						<a
-							id="sidebar-events-button"
-							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-							href="/events"
-							on:click={itemClickHandler}
-							draggable="false"
-							aria-label={$i18n.t('Events')}
-						>
-							<div class="self-center">
-								<CalendarSolid className="size-4.5" strokeWidth="2" />
-							</div>
-
-							<div class="flex self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Events')}</div>
-							</div>
-						</a>
-					</div>
-
-					<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
-						<a
-							id="sidebar-reminders-button"
-							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-							href="/reminders"
-							on:click={itemClickHandler}
-							draggable="false"
-							aria-label={$i18n.t('Reminders')}
-						>
-							<div class="self-center">
-								<ClockRotateRight className="size-4.5" strokeWidth="2" />
-							</div>
-
-							<div class="flex self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Reminders')}</div>
 							</div>
 						</a>
 					</div>

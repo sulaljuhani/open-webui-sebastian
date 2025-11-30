@@ -7,14 +7,25 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-
-	import TaskItem, { type TodoistTaskNode } from './TaskItem.svelte';
+	import TaskItem from './TaskItem.svelte';
+	import TaskDetailModal from './TaskDetailModal.svelte';
 
 	const i18n = getContext('i18n');
 
 	let loaded = $state(false);
-	let backendBaseUrl = $state('http://langgraph-agents:8000');
+	const ENV_BACKEND_URL = import.meta.env.VITE_LANGGRAPH_BACKEND_URL;
+	const ENV_BACKEND_KEY = import.meta.env.VITE_LANGGRAPH_API_KEY;
+
+	// Initialize with empty string - will be set by resolveBackendBaseUrl()
+	let backendBaseUrl = $state('');
 	let projectIdFilter = $state('');
+	let fetchError = $state('');
+
+	// Modal state
+	let showTaskModal = $state(false);
+	let selectedTask = $state<TodoistTaskNode | null>(null);
+	let newTaskDraft: Partial<TodoistTaskNode> | null = $state(null);
+	let creating = $state(false);
 
 	type TaskStatus = 'todo' | 'in_progress' | 'waiting' | 'done' | 'cancelled';
 
@@ -25,22 +36,83 @@
 		sections: { id: string; name: string; section_order: number }[];
 	};
 
+	type TodoistTaskNode = {
+		id: string;
+		todoist_id: string;
+		content: string;
+		description?: string;
+		project_id?: string;
+		section_id?: string;
+		parent_id?: string;
+		priority?: number;
+		status: TaskStatus;
+		due_date?: string | null;
+		due_string?: string | null;
+		labels?: string[];
+		child_order?: number;
+		children?: TodoistTaskNode[];
+	};
+
 	let projects: TodoistProject[] = $state([]);
 	let taskTree: TodoistTaskNode[] = $state([]);
 
+	const getApiKey = () => {
+		if (typeof localStorage !== 'undefined') {
+			const storedKey = localStorage.getItem('backend_api_key');
+			if (storedKey) return storedKey;
+		}
+		return ENV_BACKEND_KEY || '';
+	};
+
 	const getHeaders = () => {
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-		if (typeof localStorage !== 'undefined') {
-			const apiKey = localStorage.getItem('backend_api_key');
-			if (apiKey) headers['X-API-Key'] = apiKey;
-		}
+		const apiKey = getApiKey();
+		if (apiKey) headers['X-API-Key'] = apiKey;
 		return headers;
 	};
 
-	const fetchTodoistMirror = async () => {
+	const resolveBackendBaseUrl = () => {
+		// Priority 1: localStorage override
 		if (typeof localStorage !== 'undefined') {
-			backendBaseUrl = localStorage.getItem('backend_url') || backendBaseUrl;
+			const stored = localStorage.getItem('backend_url');
+			if (stored) {
+				// Avoid docker-internal host when browser cannot resolve it
+				if (stored.includes('langgraph-agents') && typeof window !== 'undefined') {
+					const fallback = `${window.location.protocol}//${window.location.hostname}:8000`;
+					console.log('🔧 Replacing docker host with browser host (stored):', fallback);
+					return fallback;
+				}
+				console.log('🔧 Using backend URL from localStorage:', stored);
+				return stored;
+			}
 		}
+
+		// Priority 2: Environment variable
+		if (ENV_BACKEND_URL) {
+			if (ENV_BACKEND_URL.includes('langgraph-agents') && typeof window !== 'undefined') {
+				const fallback = `${window.location.protocol}//${window.location.hostname}:8000`;
+				console.log('🔧 Replacing docker host with browser host (env):', fallback);
+				return fallback;
+			}
+			console.log('🔧 Using backend URL from environment:', ENV_BACKEND_URL);
+			return ENV_BACKEND_URL;
+		}
+
+		// Priority 3: Same host as frontend, port 8000
+		if (typeof window !== 'undefined') {
+			const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+			console.log('🔧 Using fallback backend URL (same host, port 8000):', fallbackUrl);
+			return fallbackUrl;
+		}
+
+		// Priority 4: Docker internal hostname (only works inside Docker network)
+		console.warn('⚠️ Using Docker internal hostname - this will NOT work from browser!');
+		return 'http://langgraph-agents:8000';
+	};
+
+	const fetchTodoistMirror = async () => {
+		backendBaseUrl = resolveBackendBaseUrl();
+		fetchError = '';
 
 		const opts = { method: 'GET', headers: getHeaders() };
 
@@ -54,42 +126,102 @@
 
 		if (projectsRes.status === 'fulfilled' && projectsRes.value.ok) {
 			projects = await projectsRes.value.json();
+			console.log('📋 Projects loaded:', projects.length, projects);
+		} else {
+			console.error('❌ Failed to load projects:', projectsRes);
 		}
 
 		if (tasksRes.status === 'fulfilled' && tasksRes.value.ok) {
-			taskTree = await tasksRes.value.json();
+			const tasks = await tasksRes.value.json();
+			taskTree = tasks.map((task) => ({ ...task, id: task.todoist_id }));
+			console.log('📝 Tasks loaded:', taskTree.length, taskTree);
+
+			// Debug: Show task distribution
+			const tasksByProject = taskTree.reduce((acc, task) => {
+				const key = task.project_id || 'no-project';
+				acc[key] = (acc[key] || 0) + 1;
+				return acc;
+			}, {} as Record<string, number>);
+			console.log('📊 Tasks by project:', tasksByProject);
+
+			const tasksBySection = taskTree.reduce((acc, task) => {
+				const key = task.section_id || 'no-section';
+				acc[key] = (acc[key] || 0) + 1;
+				return acc;
+			}, {} as Record<string, number>);
+			console.log('📊 Tasks by section:', tasksBySection);
+
+			const tasksWithParent = taskTree.filter(t => t.parent_id).length;
+			const tasksWithoutParent = taskTree.filter(t => !t.parent_id).length;
+			console.log(`📊 Tasks with parent: ${tasksWithParent}, without parent: ${tasksWithoutParent}`);
 		} else {
+			fetchError = tasksRes.status === 'fulfilled' ? `Failed to load tasks (${tasksRes.value.status})` : 'Failed to reach backend';
 			taskTree = [];
+			console.error('❌ Failed to load tasks:', tasksRes);
 		}
 	};
 
 	const handleToggleComplete = async (taskId: string, currentStatus: TaskStatus) => {
-		const newStatus: TaskStatus = currentStatus === 'done' ? 'todo' : 'done';
+		const newStatus = currentStatus === 'done' ? 'todo' : 'done';
+
+		// Optimistically update UI first
+		const originalTaskTree = [...taskTree];
+		taskTree = taskTree.map((task) =>
+			task.todoist_id === taskId ? { ...task, status: newStatus } : task
+		);
 
 		try {
-			// Update task status via Todoist REST API
-			const response = await fetch(`https://api.todoist.com/rest/v2/tasks/${taskId}/${newStatus === 'done' ? 'close' : 'reopen'}`, {
+			const response = await fetch(`${backendBaseUrl}/api/todoist/tasks/${taskId}/complete-local`, {
 				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${localStorage.getItem('todoist_api_token') || ''}`,
-					'Content-Type': 'application/json'
-				}
+				headers: getHeaders(),
+				body: JSON.stringify({
+					complete: newStatus === 'done'
+				})
 			});
+			console.log('Task toggle response:', response.status, response.ok);
 
-			if (response.ok) {
-				// Optimistically update UI
-				taskTree = taskTree.map(task =>
-					task.todoist_id === taskId ? { ...task, status: newStatus } : task
-				);
-
-				// Refresh from backend to ensure sync
-				setTimeout(() => fetchTodoistMirror(), 1000);
-			} else {
-				console.error('Failed to toggle task status:', response.status);
+			if (!response.ok) {
+				const error = await response.json();
+				console.error('Failed to update task:', error.detail || response.statusText);
+				// Revert optimistic update on failure
+				taskTree = originalTaskTree;
+				// TODO: Show user-friendly error toast
 			}
 		} catch (error) {
 			console.error('Error toggling task:', error);
+			// Revert optimistic update on network error
+			taskTree = originalTaskTree;
+			// TODO: Show user-friendly error toast
 		}
+	};
+
+	const handleTaskClick = (task: TodoistTaskNode) => {
+		selectedTask = task;
+		showTaskModal = true;
+	};
+
+	const handleCreateClick = () => {
+		newTaskDraft = {
+			todoist_id: '',
+			id: '',
+			content: '',
+			description: '',
+			project_id: projectIdFilter || (projects[0]?.id ?? ''),
+			priority: 1,
+			status: 'todo',
+		};
+		selectedTask = newTaskDraft as TodoistTaskNode;
+		showTaskModal = true;
+	};
+
+	const handleModalClose = () => {
+		showTaskModal = false;
+		selectedTask = null;
+	};
+
+	const handleTaskUpdate = async () => {
+		// Refresh the task list after updating
+		await fetchTodoistMirror();
 	};
 
 	onMount(async () => {
@@ -169,15 +301,9 @@
 			<div class="max-w-7xl mx-auto space-y-6">
 				<!-- Header -->
 				<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-					<div>
-						<h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Tasks</h1>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
-							Mirrored from Todoist via the locked subtask layout.
-						</p>
-					</div>
 					<div class="flex gap-2 flex-wrap">
 						<select
-							class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm px-3 py-2"
+							class="dark:bg-gray-900 w-fit pr-8 rounded-sm py-1.5 px-2.5 text-sm font-medium bg-transparent text-right outline-hidden"
 							bind:value={projectIdFilter}
 							onchange={fetchTodoistMirror}
 						>
@@ -186,11 +312,13 @@
 								<option value={project.id}>{project.name}</option>
 							{/each}
 						</select>
+					</div>
+					<div class="flex gap-2 flex-wrap justify-end">
 						<button
-							class="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
-							onclick={fetchTodoistMirror}
+							class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+							onclick={handleCreateClick}
 						>
-							Refresh
+							Create Task
 						</button>
 					</div>
 				</div>
@@ -198,8 +326,15 @@
 				<!-- Project/Section list -->
 				<div class="space-y-4">
 					{#if taskTree.length === 0}
-						<div class="text-center py-12 text-gray-500 dark:text-gray-500 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
-							No mirrored tasks found. Ask Sebastian to sync Todoist or add a task.
+						<div class="text-center py-12 text-gray-500 dark:text-gray-500 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl space-y-2">
+							<div>
+								{#if fetchError}
+									<p class="font-semibold text-red-500">Tasks failed to load</p>
+									<p class="text-sm">{fetchError}</p>
+								{:else}
+									<p>No tasks found.</p>
+								{/if}
+							</div>
 						</div>
 					{:else}
 						{#each projects as project (project.id)}
@@ -212,18 +347,35 @@
 												{project.name}
 											</h2>
 											<p class="text-xs text-gray-500 dark:text-gray-500">
-												{project.sections.length} sections · locked subtasks
+												{project.sections.length} sections
 											</p>
 										</div>
-									</div>
-									<div class="text-xs text-gray-500 dark:text-gray-500">
-										Project ID: {project.id}
 									</div>
 								</header>
 
 								<div class="divide-y divide-gray-100 dark:divide-gray-800">
 									{#if project.sections.length === 0}
-										<div class="p-4 text-sm text-gray-500 dark:text-gray-500">No sections</div>
+										{@const unsectionedTasks = taskTree.filter((t) => t.project_id === project.id && (!t.section_id || t.section_id === null) && (!t.parent_id || t.parent_id === null) && t.status !== 'done')}
+										<!-- Show unsectioned tasks when no sections exist -->
+										{#if unsectionedTasks.length > 0}
+											<div class="p-4 space-y-3">
+												<div class="flex items-center justify-between">
+													<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+														Unsectioned Tasks
+													</h3>
+													<div class="text-xs text-gray-500 dark:text-gray-500">
+														{unsectionedTasks.length} tasks
+													</div>
+												</div>
+												<div class="space-y-3">
+													{#each unsectionedTasks as task (task.todoist_id)}
+														<TaskItem task={task} allTasks={taskTree} onToggleComplete={handleToggleComplete} onTaskClick={handleTaskClick} />
+													{/each}
+												</div>
+											</div>
+										{:else}
+											<div class="p-4 text-sm text-gray-500 dark:text-gray-500">No tasks in this project</div>
+										{/if}
 									{:else}
 										{#each project.sections as section (section.id)}
 											<div class="p-4 space-y-3">
@@ -233,14 +385,33 @@
 													</h3>
 												</div>
 												<div class="space-y-3">
-													{#each taskTree.filter((t) => t.project_id === project.id && t.section_id === section.id && (!t.parent_id || t.parent_id === null)) as task (task.todoist_id)}
-														<TaskItem task={task} allTasks={taskTree} onToggleComplete={handleToggleComplete} />
+													{#each taskTree.filter((t) => t.project_id === project.id && t.section_id === section.id && (!t.parent_id || t.parent_id === null) && t.status !== 'done') as task (task.todoist_id)}
+														<TaskItem task={task} allTasks={taskTree} onToggleComplete={handleToggleComplete} onTaskClick={handleTaskClick} />
 													{:else}
 														<p class="text-sm text-gray-500 dark:text-gray-500">No tasks in this section.</p>
 													{/each}
 												</div>
 											</div>
 										{/each}
+										<!-- Show unsectioned tasks at the end -->
+										{#if taskTree.filter((t) => t.project_id === project.id && (!t.section_id || t.section_id === null) && (!t.parent_id || t.parent_id === null) && t.status !== 'done').length > 0}
+											{@const unsectionedTasks = taskTree.filter((t) => t.project_id === project.id && (!t.section_id || t.section_id === null) && (!t.parent_id || t.parent_id === null) && t.status !== 'done')}
+											<div class="p-4 space-y-3">
+												<div class="flex items-center justify-between">
+													<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+														Unsectioned Tasks
+													</h3>
+													<div class="text-xs text-gray-500 dark:text-gray-500">
+														{unsectionedTasks.length} tasks
+													</div>
+												</div>
+												<div class="space-y-3">
+													{#each unsectionedTasks as task (task.todoist_id)}
+														<TaskItem task={task} allTasks={taskTree} onToggleComplete={handleToggleComplete} onTaskClick={handleTaskClick} />
+													{/each}
+												</div>
+											</div>
+										{/if}
 									{/if}
 								</div>
 							</section>
@@ -250,6 +421,16 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- Task Detail Modal -->
+	<TaskDetailModal
+		show={showTaskModal}
+		task={selectedTask}
+		backendBaseUrl={backendBaseUrl}
+		getHeaders={getHeaders}
+		onClose={handleModalClose}
+		onUpdate={handleTaskUpdate}
+	/>
 {:else}
 	<div class="flex items-center justify-center h-screen">
 		<Spinner className="size-8" />

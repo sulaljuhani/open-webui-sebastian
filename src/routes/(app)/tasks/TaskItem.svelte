@@ -6,6 +6,7 @@
 	export type TaskStatus = 'todo' | 'in_progress' | 'waiting' | 'done' | 'cancelled';
 
 	export type TodoistTaskNode = {
+		id: string;
 		todoist_id: string;
 		content: string;
 		description?: string;
@@ -21,17 +22,25 @@
 		children?: TodoistTaskNode[];
 	};
 
-const { task, allTasks, onToggleComplete } = $props<{
+const { task, allTasks, onToggleComplete, onTaskClick } = $props<{
 	task: TodoistTaskNode;
 	allTasks: TodoistTaskNode[];
 	onToggleComplete?: (taskId: string, currentStatus: TaskStatus) => void;
+	onTaskClick?: (task: TodoistTaskNode) => void;
 }>();
 
 	const hasChildren = (t: TodoistTaskNode) => Boolean(t.children && t.children.length > 0);
 
-	const handleCheckboxClick = () => {
+	const handleCheckboxClick = (e: Event) => {
+		e.stopPropagation(); // Prevent triggering task click
 		if (onToggleComplete) {
 			onToggleComplete(task.todoist_id, task.status);
+		}
+	};
+
+	const handleTaskClick = () => {
+		if (onTaskClick) {
+			onTaskClick(task);
 		}
 	};
 
@@ -59,7 +68,18 @@ const { task, allTasks, onToggleComplete } = $props<{
 </script>
 
 <div class="task-wrapper">
-	<div class="bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-lg p-3 flex gap-3">
+	<div
+		class="bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-lg p-3 flex gap-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+		onclick={handleTaskClick}
+		role="button"
+		tabindex="0"
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleTaskClick();
+			}
+		}}
+	>
 		<button
 			class="flex-shrink-0 mt-1 cursor-pointer hover:opacity-70 transition"
 			onclick={handleCheckboxClick}
@@ -104,7 +124,7 @@ const { task, allTasks, onToggleComplete } = $props<{
 	{#if hasChildren(task)}
 		<div class="ml-6 mt-2 border-l-2 border-gray-200 dark:border-gray-800 pl-3 space-y-2">
 			{#each childrenFor(task.todoist_id) as child (child.todoist_id)}
-				<TaskItem task={child} {allTasks} {onToggleComplete} />
+				<TaskItem task={child} {allTasks} {onToggleComplete} {onTaskClick} />
 			{/each}
 		</div>
 	{/if}

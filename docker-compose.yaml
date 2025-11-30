@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - VITE_LANGGRAPH_API_KEY=${VITE_LANGGRAPH_API_KEY}
+        - VITE_LANGGRAPH_BACKEND_URL=${VITE_LANGGRAPH_BACKEND_URL}
     image: open-webui-sebastian:custom
     container_name: open-webui-sebastian
     volumes:
