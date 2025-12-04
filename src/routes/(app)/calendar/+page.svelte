@@ -64,14 +64,22 @@
         if (ENV_BACKEND_URL) {
             return ENV_BACKEND_URL;
         }
-        // 4) Fallback to same host as frontend on port 8000 (dev) or no port (prod/tunnel)
+        // 4) Fallback logic based on hostname
         if (typeof window !== 'undefined') {
-            if (isPrivateHost(window.location.hostname)) {
-                return `${window.location.protocol}//${window.location.hostname}:8000`;
-            } else {
-                // Public/Tunnel: assume reverse proxy handles routing
-                return `${window.location.protocol}//${window.location.hostname}`;
+            const host = window.location.hostname;
+
+            // Specific check for your production domain
+            if (host === 'llm.suluhome.com') {
+                return 'https://api.suluhome.com';
             }
+
+            // Private/Local dev
+            if (isPrivateHost(host)) {
+                return `${window.location.protocol}//${host}:8000`;
+            }
+
+            // Generic public fallback
+            return `${window.location.protocol}//${host}`;
         }
         // 5) Last resort
         return 'http://langgraph-agents:8000';
