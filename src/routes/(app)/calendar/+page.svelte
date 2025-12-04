@@ -16,6 +16,7 @@
 
     let loaded = $state(false);
     const ENV_BACKEND_URL = import.meta.env.VITE_LANGGRAPH_BACKEND_URL;
+    const ENV_BACKEND_KEY = import.meta.env.VITE_LANGGRAPH_API_KEY;
     let backendBaseUrl = $state('');
     let events = $state([]);
     let reminders = $state([]);
@@ -36,32 +37,39 @@
     const getHeaders = () => {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (typeof localStorage !== 'undefined') {
-            const apiKey = localStorage.getItem('backend_api_key');
+            const apiKey = localStorage.getItem('backend_api_key') || ENV_BACKEND_KEY || '';
             if (apiKey) headers['X-API-Key'] = apiKey;
+        } else if (ENV_BACKEND_KEY) {
+            headers['X-API-Key'] = ENV_BACKEND_KEY;
         }
         return headers;
     };
 
+    const isPrivateHost = (host: string) =>
+        /^localhost$|^127\\.|^192\\.168\\.|^10\\.|^172\\.(1[6-9]|2[0-9]|3[0-1])\\.|^100\\./.test(host);
+
     const resolveBackendBaseUrl = () => {
+        // 1) Explicit override stored by the user
         if (typeof localStorage !== 'undefined') {
             const stored = localStorage.getItem('backend_url');
             if (stored) {
-                if (stored.includes('langgraph-agents') && typeof window !== 'undefined') {
-                    return `${window.location.protocol}//${window.location.hostname}:8000`;
-                }
                 return stored;
             }
         }
+        // 2) Local browsing (LAN/tailscale): reuse the frontend host on port 8000
+        if (typeof window !== 'undefined' && isPrivateHost(window.location.hostname)) {
+            return `${window.location.protocol}//${window.location.hostname}:8000`;
+        }
+        // 3) Environment variable (prefer a reachable host, e.g. api.suluhome.com)
         if (ENV_BACKEND_URL) {
-            if (ENV_BACKEND_URL.includes('langgraph-agents') && typeof window !== 'undefined') {
-                return `${window.location.protocol}//${window.location.hostname}:8000`;
-            }
             return ENV_BACKEND_URL;
         }
+        // 4) Fallback to same host as frontend on port 8000
         if (typeof window !== 'undefined') {
             return `${window.location.protocol}//${window.location.hostname}:8000`;
         }
-        return 'http://localhost:8000';
+        // 5) Last resort
+        return 'http://langgraph-agents:8000';
     };
 
     const fetchCalendars = async () => {

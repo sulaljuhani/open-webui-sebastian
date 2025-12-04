@@ -71,41 +71,40 @@
 		return headers;
 	};
 
+	const isPrivateHost = (host: string) =>
+		/^localhost$|^127\\.|^192\\.168\\.|^10\\.|^172\\.(1[6-9]|2[0-9]|3[0-1])\\.|^100\\./.test(host);
+
 	const resolveBackendBaseUrl = () => {
-		// Priority 1: localStorage override
+		// 1) Explicit override stored by the user
 		if (typeof localStorage !== 'undefined') {
 			const stored = localStorage.getItem('backend_url');
 			if (stored) {
-				// Avoid docker-internal host when browser cannot resolve it
-				if (stored.includes('langgraph-agents') && typeof window !== 'undefined') {
-					const fallback = `${window.location.protocol}//${window.location.hostname}:8000`;
-					console.log('🔧 Replacing docker host with browser host (stored):', fallback);
-					return fallback;
-				}
 				console.log('🔧 Using backend URL from localStorage:', stored);
 				return stored;
 			}
 		}
 
-		// Priority 2: Environment variable
+		// 2) Local browsing (LAN/tailscale): reuse the frontend host on port 8000
+		if (typeof window !== 'undefined' && isPrivateHost(window.location.hostname)) {
+			const localUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+			console.log('🔧 Using local backend URL:', localUrl);
+			return localUrl;
+		}
+
+		// 3) Environment variable (expected to be a reachable host, e.g. api.suluhome.com)
 		if (ENV_BACKEND_URL) {
-			if (ENV_BACKEND_URL.includes('langgraph-agents') && typeof window !== 'undefined') {
-				const fallback = `${window.location.protocol}//${window.location.hostname}:8000`;
-				console.log('🔧 Replacing docker host with browser host (env):', fallback);
-				return fallback;
-			}
 			console.log('🔧 Using backend URL from environment:', ENV_BACKEND_URL);
 			return ENV_BACKEND_URL;
 		}
 
-		// Priority 3: Same host as frontend, port 8000
+		// 4) Fallback to same host as frontend on port 8000
 		if (typeof window !== 'undefined') {
 			const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
 			console.log('🔧 Using fallback backend URL (same host, port 8000):', fallbackUrl);
 			return fallbackUrl;
 		}
 
-		// Priority 4: Docker internal hostname (only works inside Docker network)
+		// 5) Last resort: Docker internal hostname
 		console.warn('⚠️ Using Docker internal hostname - this will NOT work from browser!');
 		return 'http://langgraph-agents:8000';
 	};

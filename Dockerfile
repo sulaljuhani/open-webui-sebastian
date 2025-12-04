@@ -43,8 +43,9 @@ RUN npm ci --force
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
-ENV VITE_LANGGRAPH_API_KEY=${VITE_LANGGRAPH_API_KEY}
-ENV VITE_LANGGRAPH_BACKEND_URL=${VITE_LANGGRAPH_BACKEND_URL}
+# Secrets should be provided at runtime (compose/Unraid), not baked into image layers.
+ENV VITE_LANGGRAPH_API_KEY=""
+ENV VITE_LANGGRAPH_BACKEND_URL=""
 RUN if [ "$SKIP_FRONTEND_BUILD" != "true" ]; then npm run build; else echo "Skipping frontend build (prebuilt assets will be used)"; fi
 
 ######## WebUI backend ########
