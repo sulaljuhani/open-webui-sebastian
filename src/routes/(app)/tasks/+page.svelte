@@ -97,11 +97,18 @@
 			return ENV_BACKEND_URL;
 		}
 
-		// 4) Fallback to same host as frontend on port 8000
+		// 4) Fallback to same host as frontend on port 8000 (dev) or no port (prod/tunnel)
 		if (typeof window !== 'undefined') {
-			const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
-			console.log('🔧 Using fallback backend URL (same host, port 8000):', fallbackUrl);
-			return fallbackUrl;
+			if (isPrivateHost(window.location.hostname)) {
+				const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+				console.log('🔧 Using fallback backend URL (private host, port 8000):', fallbackUrl);
+				return fallbackUrl;
+			} else {
+				// Public/Tunnel: assume reverse proxy handles routing or API is on same host
+				const fallbackUrl = `${window.location.protocol}//${window.location.hostname}`;
+				console.log('🔧 Using fallback backend URL (public host, standard port):', fallbackUrl);
+				return fallbackUrl;
+			}
 		}
 
 		// 5) Last resort: Docker internal hostname

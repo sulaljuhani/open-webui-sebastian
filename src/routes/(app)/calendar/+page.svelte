@@ -64,9 +64,14 @@
         if (ENV_BACKEND_URL) {
             return ENV_BACKEND_URL;
         }
-        // 4) Fallback to same host as frontend on port 8000
+        // 4) Fallback to same host as frontend on port 8000 (dev) or no port (prod/tunnel)
         if (typeof window !== 'undefined') {
-            return `${window.location.protocol}//${window.location.hostname}:8000`;
+            if (isPrivateHost(window.location.hostname)) {
+                return `${window.location.protocol}//${window.location.hostname}:8000`;
+            } else {
+                // Public/Tunnel: assume reverse proxy handles routing
+                return `${window.location.protocol}//${window.location.hostname}`;
+            }
         }
         // 5) Last resort
         return 'http://langgraph-agents:8000';
